@@ -1,0 +1,68 @@
+name: Build AutoPrint Agent
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup .NET 8
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '8.0.x'
+
+    - name: Restore dependencies
+      run: dotnet restore AutoPrintAgent/AutoPrintAgent.csproj
+
+    - name: Build Release
+      run: |
+        dotnet publish AutoPrintAgent/AutoPrintAgent.csproj `
+          -c Release `
+          -r win-x64 `
+          --self-contained true `
+          -p:PublishSingleFile=true `
+          -p:IncludeNativeLibrariesForSelfExtract=true `
+          -o ./publish
+
+    - name: Rename EXE
+      run: |
+        Move-Item ./publish/AutoPrintAgent.exe ./publish/AutoPrintAgent-Setup.exe
+      shell: pwsh
+
+    - name: Check size
+      run: |
+        Get-Item ./publish/AutoPrintAgent-Setup.exe | Select-Object Name, Length
+      shell: pwsh
+
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: AutoPrintAgent-Setup
+        path: ./publish/AutoPrintAgent-Setup.exe
+        retention-days: 90
+
+    - name: Create Release
+      if: github.ref == 'refs/heads/main'
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: v2.0.4-build-${{ github.run_number }}
+        name: AutoPrint Agent v2.0.4 (Build ${{ github.run_number }})
+        body: |
+          AutoPrint Print Agent v2.0.4
+
+          ## Installation
+          1. Download AutoPrintAgent-Setup.exe below
+          2. Right-click → Run as administrator
+          3. Enter Shop ID & Secret Key from shop panel
+          4. Select printers
+          5. Done!
+        files: ./publish/AutoPrintAgent-Setup.exe
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
