@@ -18,15 +18,23 @@ jobs:
         with:
           dotnet-version: '8.0.x'
 
-      - name: Restore
-        run: dotnet restore AutoPrintAgent/AutoPrintAgent.csproj
+      - name: Find csproj
+        id: find
+        shell: pwsh
+        run: |
+          $files = Get-ChildItem -Recurse -Filter "AutoPrintAgent.csproj"
+          if ($files.Count -eq 0) { Write-Host "Not found"; exit 1 }
+          $path = $files[0].FullName.Replace("$env:GITHUB_WORKSPACE\", "").Replace("\", "/")
+          Write-Host "Found: $path"
+          echo "path=$path" >> $env:GITHUB_OUTPUT
 
       - name: Publish
-        run: dotnet publish AutoPrintAgent/AutoPrintAgent.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o publish
+        shell: pwsh
+        run: dotnet publish "${{ steps.find.outputs.path }}" -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o publish
 
       - name: Rename
-        run: Move-Item publish/AutoPrintAgent.exe publish/AutoPrintAgent-Setup.exe
         shell: pwsh
+        run: Move-Item publish/AutoPrintAgent.exe publish/AutoPrintAgent-Setup.exe
 
       - uses: actions/upload-artifact@v4
         with:
@@ -34,7 +42,7 @@ jobs:
           path: publish/AutoPrintAgent-Setup.exe
           retention-days: 90
 
-      - name: Create Release
+      - name: Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v2.0.4-build-${{ github.run_number }}
